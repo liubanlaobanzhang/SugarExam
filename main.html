@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>考试时间提醒</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: black;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .time-display {
+            font-size: 20vw;
+            font-weight: bold;
+            text-align: center;
+            line-height: 1;
+            margin-bottom: 40px;
+        }
+        .exam-info {
+            font-size: 4vw;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .exam-time {
+            font-size: 3vw;
+            text-align: center;
+            opacity: 0.8;
+        }
+        /* 隐藏音频元素 */
+        audio {
+            display: none;
+        }
+        @media (min-width: 768px) {
+            .time-display {
+                font-size: 15vw;
+            }
+            .exam-info {
+                font-size: 3vw;
+            }
+            .exam-time {
+                font-size: 2vw;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="time-display" id="currentTime">00:00:00</div>
+    <div class="exam-info" id="examSubject">暂无考试</div>
+    <div class="exam-time" id="examTime">--:-- --:--</div>
+
+    <!-- 音频元素，用于播放提醒音 -->
+    <audio id="audioBefore10Min" preload="auto"></audio>
+    <audio id="audioBefore5Min" preload="auto"></audio>
+    <audio id="audioBefore0Min" preload="auto"></audio>
+    <audio id="audioBeforeEnd15Min" preload="auto"></audio>
+    <audio id="audioBeforeEnd0Min" preload="auto"></audio>
+
+    <script>
+        // ==================== 配置文件（请根据实际情况修改） ====================
+        const CONFIG = {
+            // 考试时间表JSON的URL（必须替换为真实的接口地址）
+            scheduleUrl: 'https://example.com/exam_schedule.json',
+            // 各时间点的音频文件URL（请替换为真实的音频文件路径）
+            audioUrls: {
+                before10Min: 'audio/before10min.mp3',
+                before5Min: 'audio/before5min.mp3',
+                before0Min: 'audio/before0min.mp3',
+                beforeEnd15Min: 'audio/beforeEnd15min.mp3',
+                beforeEnd0Min: 'audio/beforeEnd0min.mp3'
+            }
+        };
+
+        // ==================== 获取DOM元素 ====================
+        const currentTimeEl = document.getElementById('currentTime');
+        const examSubjectEl = document.getElementById('examSubject');
+        const examTimeEl = document.getElementById('examTime');
+        const audioBefore10Min = document.getElementById('audioBefore10Min');
+        const audioBefore5Min = document.getElementById('audioBefore5Min');
+        const audioBefore0Min = document.getElementById('audioBefore0Min');
+        const audioBeforeEnd15Min = document.getElementById('audioBeforeEnd15Min');
+        const audioBeforeEnd0Min = document.getElementById('audioBeforeEnd0Min');
+
+        // 设置音频元素的src
+        audioBefore10Min.src = CONFIG.audioUrls.before10Min;
+        audioBefore5Min.src = CONFIG.audioUrls.before5Min;
+        audioBefore0Min.src = CONFIG.audioUrls.before0Min;
+        audioBeforeEnd15Min.src = CONFIG.audioUrls.beforeEnd15Min;
+        audioBeforeEnd0Min.src = CONFIG.audioUrls.beforeEnd0Min;
+
+        // ==================== 全局变量 ====================
+        let schedule = [];          // 考试时间表
+        let currentExam = null;     // 当前考试（或下一个考试）
+        let playedFlags = {};       // 记录每个考试的音频播放状态
+
+        // ==================== 功能函数 ====================
+        // 更新当前时间显示
+        function updateCurrentTime() {
+            const now = new Date();
+            const timeStr = now.toTimeString().split(' ')[0]; // HH:mm:ss
+            currentTimeEl.textContent = timeStr;
+        }
+
+        // 从服务器获取考试时间表
+        async function fetchSchedule() {
+            try {
+                const response = await fetch(CONFIG.scheduleUrl);
+                if (!response.ok) throw new Error('网络响应不正常');
+                schedule = await response.json();
+                console.log('考试时间表已加载:', schedule);
+                findCurrentExam();
+            } catch (error) {
+                console.error('获取考试时间表失败:', error);
+                examSubjectEl.textContent = '无法加载考试时间表';
+            }
+        }
+
+        // 查找当前考试（或下一个考试）
+        function findCurrentExam() {
+            const now = new Date();
+            let found = null;
+
+            // 优先查找正在进行的考试
+            for (const exam of schedule) {
+                const start = new Date(exam.start);
+                const end = new Date(exam.end);
+                if (now >= start && now <= end) {
+                    found = exam;
+                    break;
+                }
+            }
+
+            // 如果没有正在进行的考试，则查找下一个即将开始的考试
+            if (!found) {
+                for (const exam of schedule) {
+                    const start = new Date(exam.start);
+                    if (start > now) {
+                        found = exam;
+                        break;
+                    }
+                }
+            }
+
+            currentExam = found;
+            updateExamDisplay();
+            // 重置该考试的播放标志（如果尚未初始化）
+            if (currentExam && !playedFlags[currentExam.id]) {
+                playedFlags[currentExam.id] = {
+                    before10Min: false,
+                    before5Min: false,
+                    before0Min: false,
+                    beforeEnd15Min: false,
+                    beforeEnd0Min: false
+                };
+            }
+        }
+
+        // 更新考试信息显示
+        function updateExamDisplay() {
+            if (!currentExam) {
+                examSubjectEl.textContent = '暂无考试';
+                examTimeEl.textContent = '--:-- --:--';
+                return;
+            }
+
+            const start = new Date(currentExam.start);
+            const end = new Date(currentExam.end);
+            const startStr = start.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            const endStr = end.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+
+            examSubjectEl.textContent = currentExam.subject;
+            examTimeEl.textContent = `${startStr} - ${endStr}`;
+        }
+
+        // 检查并触发音频提醒
+        function checkAudioReminders() {
+            if (!currentExam) return;
+
+            const now = new Date();
+            const start = new Date(currentExam.start);
+            const end = new Date(currentExam.end);
+            const flags = playedFlags[currentExam.id];
+            if (!flags) return;
+
+            // 计算时间差（分钟）
+            const diffToStart = (start - now) / (1000 * 60); // 距离开始的分钟数
+            const diffToEnd = (end - now) / (1000 * 60);   // 距离结束的分钟数
+
+            // 考前10分钟
+            if (diffToStart <= 10 && diffToStart > 5 && !flags.before10Min) {
+                audioBefore10Min.play();
+                flags.before10Min = true;
+                console.log('播放考前10分钟提醒');
+            }
+            // 考前5分钟
+            if (diffToStart <= 5 && diffToStart > 0 && !flags.before5Min) {
+                audioBefore5Min.play();
+                flags.before5Min = true;
+                console.log('播放考前5分钟提醒');
+            }
+            // 考试开始（0分钟）
+            if (diffToStart <= 0 && diffToStart > -1 && !flags.before0Min) {
+                audioBefore0Min.play();
+                flags.before0Min = true;
+                console.log('播放考试开始提醒');
+            }
+            // 结束前15分钟
+            if (diffToEnd <= 15 && diffToEnd > 0 && !flags.beforeEnd15Min) {
+                audioBeforeEnd15Min.play();
+                flags.beforeEnd15Min = true;
+                console.log('播放结束前15分钟提醒');
+            }
+            // 结束前0分钟（考试结束）
+            if (diffToEnd <= 0 && diffToEnd > -1 && !flags.beforeEnd0Min) {
+                audioBeforeEnd0Min.play();
+                flags.beforeEnd0Min = true;
+                console.log('播放考试结束提醒');
+            }
+
+            // 如果考试已结束，查找下一个考试
+            if (now > end) {
+                findCurrentExam();
+            }
+        }
+
+        // ==================== 初始化 ====================
+        updateCurrentTime();
+        setInterval(updateCurrentTime, 1000); // 每秒更新一次时间
+
+        fetchSchedule(); // 获取考试时间表
+        setInterval(checkAudioReminders, 1000); // 每秒检查一次音频提醒
+    </script>
+</body>
+</html>
