@@ -3,45 +3,117 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>考试时间提醒</title>
+    <title>考试时间提醒系统</title>
+    <!-- 引入HarmonyOS Sans SC字体 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
+        
         body {
-            background-color: black;
-            color: white;
-            font-family: Arial, sans-serif;
+            /* 动态渐变背景 */
+            background: linear-gradient(135deg, 
+                rgb(255, 225, 225) 0%, 
+                rgb(241, 234, 255) 50%, 
+                rgb(227, 244, 255) 100%);
+            background-size: 400% 400%;
+            animation: gradientMove 15s ease infinite;
+            
+            color: #333;
+            font-family: 'Noto Sans SC', 'HarmonyOS Sans SC', Arial, sans-serif;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             padding: 20px;
+            position: relative;
+            overflow-x: hidden;
         }
+        
+        @keyframes gradientMove {
+            0% {
+                background-position: 0% 50%;
+            }
+            50% {
+                background-position: 100% 50%;
+            }
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+        
         .time-display {
             font-size: 20vw;
             font-weight: bold;
             text-align: center;
             line-height: 1;
             margin-bottom: 40px;
+            color: black;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
         }
+        
         .exam-info {
             font-size: 4vw;
             text-align: center;
             margin-bottom: 20px;
+            font-weight: 500;
         }
+        
         .exam-time {
             font-size: 3vw;
             text-align: center;
             opacity: 0.8;
+            font-weight: 400;
         }
+        
+        /* 浮动提示条样式 */
+        .notification-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: rgb(250, 255, 199);
+            border-bottom: 3px solid rgb(245, 217, 255);
+            color: rgb(245, 217, 255);
+            text-shadow: 0 0 1px rgba(0, 0, 0, 0.2);
+            padding: 15px 20px;
+            font-size: 1.2rem;
+            font-weight: 500;
+            text-align: center;
+            z-index: 1000;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            transform: translateY(-100%);
+            opacity: 0;
+            transition: transform 0.5s ease, opacity 0.5s ease;
+        }
+        
+        .notification-bar.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        .notification-bar-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+        
+        .notification-icon {
+            font-size: 1.5rem;
+        }
+        
         /* 隐藏音频元素 */
         audio {
             display: none;
         }
+        
         @media (min-width: 768px) {
             .time-display {
                 font-size: 15vw;
@@ -53,9 +125,69 @@
                 font-size: 2vw;
             }
         }
+        
+        /* 装饰性元素 */
+        .bg-element {
+            position: absolute;
+            border-radius: 50%;
+            opacity: 0.1;
+            z-index: -1;
+        }
+        
+        .bg-element-1 {
+            width: 200px;
+            height: 200px;
+            background: rgb(255, 225, 225);
+            top: 10%;
+            left: 5%;
+            animation: float 20s infinite ease-in-out;
+        }
+        
+        .bg-element-2 {
+            width: 300px;
+            height: 300px;
+            background: rgb(227, 244, 255);
+            bottom: 10%;
+            right: 5%;
+            animation: float 25s infinite ease-in-out reverse;
+        }
+        
+        .bg-element-3 {
+            width: 150px;
+            height: 150px;
+            background: rgb(241, 234, 255);
+            top: 50%;
+            right: 15%;
+            animation: float 18s infinite ease-in-out;
+        }
+        
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0) rotate(0deg);
+            }
+            33% {
+                transform: translateY(-20px) rotate(120deg);
+            }
+            66% {
+                transform: translateY(20px) rotate(240deg);
+            }
+        }
     </style>
 </head>
 <body>
+    <!-- 装饰性背景元素 -->
+    <div class="bg-element bg-element-1"></div>
+    <div class="bg-element bg-element-2"></div>
+    <div class="bg-element bg-element-3"></div>
+    
+    <!-- 浮动提示条 -->
+    <div class="notification-bar" id="notificationBar">
+        <div class="notification-bar-content">
+            <span class="notification-icon">🔔</span>
+            <span id="notificationText">考试提醒</span>
+        </div>
+    </div>
+    
     <div class="time-display" id="currentTime">00:00:00</div>
     <div class="exam-info" id="examSubject">暂无考试</div>
     <div class="exam-time" id="examTime">--:-- --:--</div>
@@ -74,11 +206,19 @@
             scheduleUrl: 'schedule.json',
             // 各时间点的音频文件URL（请替换为真实的音频文件路径）
             audioUrls: {
-                before10Min: 'pre10.wav',
-                before5Min: 'audio/before5min.mp3',
-                before0Min: 'audio/before0min.mp3',
-                beforeEnd15Min: 'audio/15toEnd.wav',
-                beforeEnd0Min: 'audio/beforeEnd0min.mp3'
+                before10Min: 'audio/pre10.wav',
+                before5Min: 'audio/pre5.wav',
+                before0Min: 'audio/start.wav',
+                beforeEnd15Min: 'audio/15toend.wav',
+                beforeEnd0Min: 'audio/0toend.wav'
+            },
+            // 通知文本配置
+            notificationTexts: {
+                before10Min: '试卷解封',
+                before5Min: '试卷分发',
+                before0Min: '开始考试',
+                beforeEnd15Min: '距离考试结束还有15分钟',
+                beforeEnd0Min: '考试结束'
             }
         };
 
@@ -86,6 +226,9 @@
         const currentTimeEl = document.getElementById('currentTime');
         const examSubjectEl = document.getElementById('examSubject');
         const examTimeEl = document.getElementById('examTime');
+        const notificationBar = document.getElementById('notificationBar');
+        const notificationText = document.getElementById('notificationText');
+        
         const audioBefore10Min = document.getElementById('audioBefore10Min');
         const audioBefore5Min = document.getElementById('audioBefore5Min');
         const audioBefore0Min = document.getElementById('audioBefore0Min');
@@ -105,6 +248,17 @@
         let playedFlags = {};       // 记录每个考试的音频播放状态
 
         // ==================== 功能函数 ====================
+        // 显示通知条
+        function showNotification(message) {
+            notificationText.textContent = message;
+            notificationBar.classList.add('show');
+            
+            // 3秒后隐藏通知条
+            setTimeout(() => {
+                notificationBar.classList.remove('show');
+            }, 3000);
+        }
+
         // 更新当前时间显示
         function updateCurrentTime() {
             const now = new Date();
@@ -112,17 +266,31 @@
             currentTimeEl.textContent = timeStr;
         }
 
-        // 从服务器获取考试时间表
+        // 从服务器获取考试时间表（使用模拟数据作为示例）
         async function fetchSchedule() {
             try {
                 const response = await fetch(CONFIG.scheduleUrl);
                 if (!response.ok) throw new Error('网络响应不正常');
                 schedule = await response.json();
+               
                 console.log('考试时间表已加载:', schedule);
                 findCurrentExam();
             } catch (error) {
                 console.error('获取考试时间表失败:', error);
                 examSubjectEl.textContent = '无法加载考试时间表';
+                // 使用默认考试数据
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                
+                schedule = [
+                    {
+                        id: "default",
+                        subject: "示例考试",
+                        start: new Date(today.getTime() + (1 * 60 * 60 * 1000)).toISOString(), // 1小时后
+                        end: new Date(today.getTime() + (3 * 60 * 60 * 1000)).toISOString()    // 3小时后
+                    }
+                ];
+                findCurrentExam();
             }
         }
 
@@ -169,8 +337,8 @@
         // 更新考试信息显示
         function updateExamDisplay() {
             if (!currentExam) {
-                examSubjectEl.textContent = '暂无考试';
-                examTimeEl.textContent = '--:-- --:--';
+                examSubjectEl.textContent = '暂无考试安排';
+                examTimeEl.textContent = '请等待考试时间表更新';
                 return;
             }
 
@@ -200,30 +368,35 @@
             // 考前10分钟
             if (diffToStart <= 10 && diffToStart > 5 && !flags.before10Min) {
                 audioBefore10Min.play();
+                showNotification(CONFIG.notificationTexts.before10Min);
                 flags.before10Min = true;
                 console.log('播放考前10分钟提醒');
             }
             // 考前5分钟
             if (diffToStart <= 5 && diffToStart > 0 && !flags.before5Min) {
                 audioBefore5Min.play();
+                showNotification(CONFIG.notificationTexts.before5Min);
                 flags.before5Min = true;
                 console.log('播放考前5分钟提醒');
             }
             // 考试开始（0分钟）
             if (diffToStart <= 0 && diffToStart > -1 && !flags.before0Min) {
                 audioBefore0Min.play();
+                showNotification(CONFIG.notificationTexts.before0Min);
                 flags.before0Min = true;
                 console.log('播放考试开始提醒');
             }
             // 结束前15分钟
             if (diffToEnd <= 15 && diffToEnd > 0 && !flags.beforeEnd15Min) {
                 audioBeforeEnd15Min.play();
+                showNotification(CONFIG.notificationTexts.beforeEnd15Min);
                 flags.beforeEnd15Min = true;
                 console.log('播放结束前15分钟提醒');
             }
             // 结束前0分钟（考试结束）
             if (diffToEnd <= 0 && diffToEnd > -1 && !flags.beforeEnd0Min) {
                 audioBeforeEnd0Min.play();
+                showNotification(CONFIG.notificationTexts.beforeEnd0Min);
                 flags.beforeEnd0Min = true;
                 console.log('播放考试结束提醒');
             }
@@ -240,6 +413,18 @@
 
         fetchSchedule(); // 获取考试时间表
         setInterval(checkAudioReminders, 1000); // 每秒检查一次音频提醒
+        
+        // 添加页面点击事件以解决浏览器音频自动播放限制
+        document.body.addEventListener('click', function() {
+            // 静音播放一次以激活音频上下文
+            const audio = new Audio();
+            audio.muted = true;
+            audio.play().then(() => {
+                console.log('音频上下文已激活');
+            }).catch(e => {
+                console.log('音频上下文激活失败:', e);
+            });
+        });
     </script>
 </body>
 </html>
